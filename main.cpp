@@ -1,25 +1,43 @@
 #include "main.h"
 
+static void show_usage()
+{
+	std::cerr << "Usage: D2TextureRipper -p [packages path] -o [output path] -i [package id] -v [version]"
+		<< std::endl;
+	std::cerr << "-i extracts a package of textures\n";
+	std::cerr << "-v changes the selected version. Valid types are: \"prebl\"\n";
+}
+
 int main(int argc, char** argv) {
 
 	Sarge sarge;
 	sarge.setArgument("p", "pkgspath", "packages path", true);
 	sarge.setArgument("o", "outputpath", "output path", true);
 	sarge.setArgument("i", "pkgid", "package id", true);
+	sarge.setArgument("v", "version", "version changer", true);
 
 	if (!sarge.parseArguments(argc, argv))
 	{
 		std::cerr << "Couldn't parse arguments..." << std::endl;
+		show_usage();
 		return 1;
 	}
 
 	std::string outputPath;
-
+	std::string version;
 	sarge.getFlag("pkgspath", packagesPath);
 	sarge.getFlag("outputpath", outputPath);
 	sarge.getFlag("pkgid", pkgID);
+	sarge.getFlag("version", version);
+	
+	bool prebl = false;
 
 	Package pkg(pkgID, packagesPath);
+	
+	if (version == "prebl" || version == "PREBL") {
+		pkg.preBL = true;
+		prebl = true;
+	}
 
 	pkg.readHeader();
 	pkg.getEntryTable();
@@ -31,24 +49,35 @@ int main(int argc, char** argv) {
 			std::string datahash = entry.reference;
 			int16_t textureFormat, width, height, arraySize;
 			std::string largeHash;
-			std::string headerHash = getReferenceFromHash(datahash, packagesPath);
+			std::string headerHash = getReferenceFromHash(datahash, packagesPath, true);
 			hash = headerHash;
 			int fileSize;
-			getFile();
-			memcpy((char*)&textureFormat, data + 4, 2);
-			memcpy((char*)&width, data + 0x22, 2);
-			memcpy((char*)&height, data + 0x24, 2);
-			memcpy((char*)&arraySize, data + 0x28, 2);
-			uint32_t val;
-			memcpy((char*)&val, data + 0x3C, 4);
-			largeHash = uint32ToHexStr(val);
+			getFile(prebl);
+			if (version == "prebl" || version == "PREBL") {
+				memcpy((char*)&textureFormat, data + 4, 2);
+				memcpy((char*)&width, data + 0xE, 2);
+				memcpy((char*)&height, data + 0x10, 2);
+				memcpy((char*)&arraySize, data + 0x14, 2);
+				uint32_t val;
+				memcpy((char*)&val, data + 0x24, 4);
+				largeHash = uint32ToHexStr(val);
+			}
+			else {
+				memcpy((char*)&textureFormat, data + 4, 2);
+				memcpy((char*)&width, data + 0x22, 2);
+				memcpy((char*)&height, data + 0x24, 2);
+				memcpy((char*)&arraySize, data + 0x28, 2);
+				uint32_t val;
+				memcpy((char*)&val, data + 0x3C, 4);
+				largeHash = uint32ToHexStr(val);
+			}
 			if (largeHash != "FFFFFFFF" && largeHash != "")
 				hash = datahash;
 			else
 				hash = largeHash;
 			delete[] data;
 
-			fileSize = getFile();
+			fileSize = getFile(prebl);
 
 			//p much just 100% copied from MDE/texture.cpp @ L64
 
@@ -107,7 +136,7 @@ int main(int argc, char** argv) {
 			}
 			if(!std::filesystem::exists(outputPath))
 				std::filesystem::create_directories(outputPath);
-			std::string fullDDSPath = outputPath + "/" + pkgID + "-" + boost::to_upper_copy(uint16ToHexStr(i)) + ".dds";
+			std::string fullDDSPath = outputPath + "/" + boost::to_upper_copy(pkgID) + "-" + boost::to_upper_copy(uint16ToHexStr(i)) + ".dds";
 			FILE* outputFile;
 			fopen_s(&outputFile, fullDDSPath.c_str(), "wb");
 			if (outputFile != NULL) {
@@ -133,11 +162,13 @@ int main(int argc, char** argv) {
 	}
 }
 
-int getFile()
+int getFile(bool prebl)
 {
 	if (pkgID == "")
 		pkgID = getPkgID(hash);
 	Package pkg(pkgID, packagesPath);
+	if (prebl)
+		pkg.preBL = true;
 	int fileSize;
 	data = pkg.getEntryData(hash, fileSize);
 	if (data == nullptr || sizeof(data) == 0) return 0;
