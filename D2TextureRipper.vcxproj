@@ -131,22 +131,26 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>D:\DestinyUnpackerCPP\boost_1_76_0;D:\MontsUnpackerCPP;D:\DestinyUnpackerCPP\Sarge;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\DestinyUnpackerCPP\boost_1_76_0;D:\DestinyUnpackerCPP\Sarge;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>D:\MontsUnpackerCPP\x64\Release\package.obj;D:\MontsUnpackerCPP\x64\Release\helpers.obj;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="helpers.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="package.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="dxgiformat.h" />
+    <ClInclude Include="helpers.h" />
     <ClInclude Include="main.h" />
+    <ClInclude Include="package.h" />
     <ClInclude Include="texture.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

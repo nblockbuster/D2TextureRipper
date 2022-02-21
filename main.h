@@ -1,5 +1,5 @@
 #pragma once
-#include <package.h>
+#include "package.h"
 #include <src\sarge.cpp>
 #include <stdio.h>
 #include "texture.h"
@@ -10,4 +10,4 @@ std::string packagesPath = "";
 std::string hash = "";
 unsigned char* data = nullptr;
 
-int getFile();
+int getFile(bool prebl);
