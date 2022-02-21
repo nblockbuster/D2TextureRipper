@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
 			}
 			if(!std::filesystem::exists(outputPath))
 				std::filesystem::create_directories(outputPath);
-			std::string fullDDSPath = outputPath + "/" + pkgID + "-" + boost::to_upper_copy(uint16ToHexStr(i)) + ".dds";
+			std::string fullDDSPath = outputPath + "/" + boost::to_upper_copy(pkgID) + "-" + boost::to_upper_copy(uint16ToHexStr(i)) + ".dds";
 			FILE* outputFile;
 			fopen_s(&outputFile, fullDDSPath.c_str(), "wb");
 			if (outputFile != NULL) {
