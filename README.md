@@ -1,5 +1,5 @@
 # D2TextureRipper
-Batch rips textures and images from Destiny 2 versions 3.0.0.1 -> 4.0.0.1
+Batch rips textures and images from Destiny 2 versions 1.0.0.1 -> 4.0.0.1
 
 Requires [Sarge](https://github.com/MayaPosch/Sarge), [DestinyUnpackerCPP](https://github.com/MontagueM/DestinyUnpackerCPP), and [Boost](https://www.boost.org/) to build.
 
