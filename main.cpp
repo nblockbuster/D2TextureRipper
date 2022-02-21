@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
 	sarge.getFlag("pkgid", pkgID);
 	sarge.getFlag("version", version);
 	
-	bool prebl;
+	bool prebl = false;
 
 	Package pkg(pkgID, packagesPath);
 	
