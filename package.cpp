@@ -133,11 +133,6 @@ bool Package::readHeader()
 		fread((char*)&header.blockTableSize, 1, 4, pkgFile);
 		fread((char*)&header.blockTableOffset, 1, 4, pkgFile);
 
-		// Hash64 Table
-		fseek(pkgFile, 0xB8, SEEK_SET);
-		fread((char*)&header.hash64TableSize, 1, 4, pkgFile);
-		fread((char*)&header.hash64TableOffset, 1, 4, pkgFile);
-		header.hash64TableOffset += 64; // relative offset
 	}
 	return true;
 }
@@ -210,88 +205,6 @@ void Package::modifyNonce()
 	}
 }
 
-void Package::extractFiles()
-{
-	std::vector<std::string> pkgPatchStreamPaths;
-	std::string outputPath = CUSTOM_DIR + "/output/" + uint16ToHexStr(header.pkgID);
-	std::filesystem::create_directories(outputPath);
-	// Initialising the required file streams
-	for (int i = 0; i <= header.patchID; i++)
-	{
-		std::string pkgPatchPath = packagePath;
-		pkgPatchPath[pkgPatchPath.size() - 5] = char(i + 48);
-		pkgPatchStreamPaths.push_back(pkgPatchPath);
-		std::cout << pkgPatchPath << "\n";
-	}
-	// Extracting each entry to a file
-	for (int i = 0; i < entries.size(); i++)
-	{
-		Entry entry = entries[i];
-		int currentBlockID = entry.startingBlock;
-		int blockCount = floor((entry.startingBlockOffset + entry.fileSize - 1) / BLOCK_SIZE);
-		if (entry.fileSize == 0) blockCount = 0; // Stupid check for weird C++ floor behaviour
-		int lastBlockID = currentBlockID + blockCount;
-		unsigned char* fileBuffer = new unsigned char[entry.fileSize];
-		int currentBufferOffset = 0;
-		while (currentBlockID <= lastBlockID)
-		{
-			Block currentBlock = blocks[currentBlockID];
-
-			FILE* pFile;
-			fopen_s(&pFile, pkgPatchStreamPaths[currentBlock.patchID].c_str(), "rb");
-			fseek(pFile, currentBlock.offset, SEEK_SET);
-			unsigned char* blockBuffer = new unsigned char[currentBlock.size];
-			size_t result;
-			result = fread(blockBuffer, 1, currentBlock.size, pFile);
-			if (result != currentBlock.size) { fputs("Reading error", stderr); exit(3); }
-
-			unsigned char* decryptBuffer = new unsigned char[currentBlock.size];
-			unsigned char* decompBuffer = new unsigned char[BLOCK_SIZE];
-
-			if (currentBlock.bitFlag & 0x2)
-				decryptBlock(currentBlock, blockBuffer, decryptBuffer);
-			else
-				decryptBuffer = blockBuffer;
-
-			if (currentBlock.bitFlag & 0x1)
-				decompressBlock(currentBlock, decryptBuffer, decompBuffer);
-			else
-				decompBuffer = decryptBuffer;
-
-			if (currentBlockID == entry.startingBlock)
-			{
-				size_t cpySize;
-				if (currentBlockID == lastBlockID)
-					cpySize = entry.fileSize;
-				else
-					cpySize = BLOCK_SIZE - entry.startingBlockOffset;
-				memcpy(fileBuffer, decompBuffer + entry.startingBlockOffset, cpySize);
-				currentBufferOffset += cpySize;
-			}
-			else if (currentBlockID == lastBlockID)
-			{
-				memcpy(fileBuffer + currentBufferOffset, decompBuffer, entry.fileSize - currentBufferOffset);
-			}
-			else
-			{
-				memcpy(fileBuffer + currentBufferOffset, decompBuffer, BLOCK_SIZE);
-				currentBufferOffset += BLOCK_SIZE;
-			}
-
-			fclose(pFile);
-			currentBlockID++;
-			delete[] decompBuffer;
-		}
-
-		FILE* oFile;
-		std::string name = outputPath + "/" + uint16ToHexStr(header.pkgID) + "-" + uint16ToHexStr(i) + ".bin";
-		fopen_s(&oFile, name.c_str(), "wb");
-		fwrite(fileBuffer, entry.fileSize, 1, oFile);
-		fclose(oFile);
-		delete[] fileBuffer;
-	}
-}
-
 // Bcrypt decryption implementation largely from Sir Kane's SourcePublic_v2.cpp, very mysterious
 void Package::decryptBlock(Block block, unsigned char* blockBuffer, unsigned char*& decryptBuffer)
 {
@@ -350,8 +263,7 @@ bool Package::initOodle()
 		//std::cout << "OLD OODLE\n";
 	}
 	else {
-		hOodleDll = LoadLibrary(L"oo2core_8_win64.dll");
-		//std::cout << "NEW OODLE\n";
+		hOodleDll = LoadLibrary(L"oo2core_9_win64.dll");
 	}
 
 	if (hOodleDll == nullptr) {
@@ -360,22 +272,6 @@ bool Package::initOodle()
 	OodleLZ_Decompress = (int64_t)GetProcAddress(hOodleDll, "OodleLZ_Decompress");
 	if (!OodleLZ_Decompress) printf("Failed to find Oodle compress/decompress functions in DLL!");
 	return true;
-}
-
-bool Package::Unpack()
-{
-	readHeader();
-	if (!initOodle())
-	{
-		printf("\nFailed to initialise oodle");
-		return 1;
-	}
-	modifyNonce();
-	getEntryTable();
-	getBlockTable();
-	fclose(pkgFile);
-	extractFiles();
-	return 0;
 }
 
 // Most efficient route to getting a single entry's reference
@@ -395,6 +291,7 @@ std::string Package::getEntryReference(std::string hash)
 		//exit(status);
 	}
 	if (preBL) {
+		//gen pre-bl
 		uint32_t newTableOffset;
 		bool newPkg = false;
 		fseek(pkgFile, 0x1A, SEEK_SET);
@@ -413,6 +310,7 @@ std::string Package::getEntryReference(std::string hash)
 		}
 	}
 	else {
+		//post-bl
 		fseek(pkgFile, 0x44, SEEK_SET);
 		fread((char*)&entryTableOffset, 1, 4, pkgFile);
 	}
@@ -493,135 +391,6 @@ unsigned char* Package::getEntryData(std::string hash, int& fileSize)
 	unsigned char* buffer = getBufferFromEntry(entry);
 	fclose(pkgFile);
 	return buffer;
-}
-
-std::unordered_map<uint64_t, uint32_t> generateH64Table(std::string packagesPath)
-{
-	std::set<std::string> pkgIDs;
-	std::unordered_map<uint64_t, uint32_t> hash64Table;
-
-	std::string path;
-	int status;
-	std::string fullPath;
-	std::string reducedPath;
-	uint16_t pkgIDBytes;
-	std::string pkgID;
-	FILE* pkgFile;
-	// Getting all packages
-	for (const auto& entry : std::filesystem::directory_iterator(packagesPath))
-	{
-		path = entry.path().u8string();
-		status = fopen_s(&pkgFile, path.c_str(), "rb");
-		if (status)
-		{
-			std::cerr << "FAILED GETTING PACKAGES FOR H64 ERR1515";
-			exit(status);
-		}
-		fseek(pkgFile, 0x10, SEEK_SET);
-		fread((char*)&pkgIDBytes, 1, 2, pkgFile);
-		pkgID = uint16ToHexStr(pkgIDBytes);
-		pkgIDs.insert(pkgID);
-		fclose(pkgFile);
-	}
-	for (auto& pkgID : pkgIDs)
-	{
-		Package pkg = Package(pkgID, packagesPath);
-		status = fopen_s(&pkgFile, pkg.packagePath.c_str(), "rb");
-		if (status)
-		{
-			std::cerr << "FAILED GETTING PACKAGES FOR H64 ERR5632";
-			exit(status);
-		}
-		// Hash64 Table
-		uint32_t hash64TableCount;
-		uint32_t hash64TableOffset;
-		fseek(pkgFile, 0xB8, SEEK_SET);
-		fread((char*)&hash64TableCount, 1, 4, pkgFile);
-		if (!hash64TableCount) continue;
-		fread((char*)&hash64TableOffset, 1, 4, pkgFile);
-		hash64TableOffset += 64 + 0x10;
-
-		for (int i = hash64TableOffset; i < hash64TableOffset + hash64TableCount * 0x10; i += 0x10)
-		{
-			uint64_t h64Val;
-			fseek(pkgFile, i, SEEK_SET);
-			fread((char*)&h64Val, 1, 8, pkgFile);
-			uint32_t hVal;
-			fread((char*)&hVal, 1, 4, pkgFile);
-			hash64Table[h64Val] = hVal;
-		}
-		fclose(pkgFile);
-	}
-	return hash64Table;
-}
-
-bool saveH64Table(std::unordered_map<uint64_t, uint32_t> hash64Table)
-{
-	FILE* file;
-	int status = fopen_s(&file, "h64", "wb");
-	if (status)
-	{
-		std::cerr << "FAILED WRITING H64 ERR5157";
-		exit(status);
-	}
-	if (file == NULL) return false;
-	for (auto& element : hash64Table)
-	{
-		fwrite(&element.first, 8, 1, file);
-		fwrite(&element.second, 4, 1, file);
-	}
-	fclose(file);
-	return true;
-}
-
-std::unordered_map<uint64_t, uint32_t> loadH64Table()
-{
-	std::unordered_map<uint64_t, uint32_t> hash64Table;
-	FILE* file;
-	int status = fopen_s(&file, "h64", "rb");
-	if (status)
-	{
-		std::cerr << "FAILED READING H64 ERR1231";
-		exit(status);
-	}
-	uint64_t h64Val;
-	uint32_t hVal;
-	fread(&h64Val, 8, 1, file);
-	size_t read = fread(&hVal, 4, 1, file);
-	hash64Table[h64Val] = hVal;
-	while (read)
-	{
-		fread(&h64Val, 8, 1, file);
-		read = fread(&hVal, 4, 1, file);
-		hash64Table[h64Val] = hVal;
-	}
-	fclose(file);
-	return hash64Table;
-}
-
-// For batch extraction
-std::vector<std::string> Package::getAllFilesGivenRef(std::string reference)
-{
-	//uint32_t ref = hexStrToUint32(reference);
-	std::vector<std::string> hashes;
-
-	// Header data
-	bool status = readHeader();
-	if (!status) return std::vector<std::string>();
-
-	getEntryTable();
-	for (int i = 0; i < entries.size(); i++)
-	{
-		Entry entry = entries[i];
-		if (entry.reference == reference)
-		{
-			uint32_t a = header.pkgID * 8192;
-			uint32_t b = a + i + 2155872256;
-			hashes.push_back(uint32ToHexStr(b));
-		}
-	}
-
-	return hashes;
 }
 
 unsigned char* Package::getBufferFromEntry(Entry entry)

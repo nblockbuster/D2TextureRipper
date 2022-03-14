@@ -12,11 +12,6 @@
 #include <bcrypt.h>
 #include <set>
 #include "helpers.h"
-#include <unordered_map>
-
-std::unordered_map<uint64_t, uint32_t> loadH64Table();
-std::unordered_map<uint64_t, uint32_t> generateH64Table(std::string packagesPath);
-bool saveH64Table(std::unordered_map<uint64_t, uint32_t> hash64Table);
 
 struct PkgHeader
 {
@@ -27,8 +22,6 @@ struct PkgHeader
 	uint32_t entryTableSize;
 	uint32_t blockTableOffset;
 	uint32_t blockTableSize;
-	uint32_t hash64TableOffset;
-	uint32_t hash64TableSize;
 };
 
 struct Entry
@@ -78,7 +71,6 @@ private:
 
 
 	void getBlockTable();
-	void extractFiles();
 	void decryptBlock(Block block, unsigned char* blockBuffer, unsigned char*& decryptBuffer);
 	void decompressBlock(Block block, unsigned char* decryptBuffer, unsigned char*& decompBuffer);
 
@@ -100,7 +92,6 @@ public:
 	uint8_t getEntryTypes(std::string hash, uint8_t& subType);
 	std::string getLatestPatchIDPath(std::string packageName);
 	unsigned char* getEntryData(std::string hash, int& fileSize);
-	std::vector<std::string> getAllFilesGivenRef(std::string reference);
 	unsigned char* getBufferFromEntry(Entry entry);
 
 	bool preBL = false;
