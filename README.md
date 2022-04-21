@@ -10,8 +10,9 @@ You also need to copy "oo2core_8_win64.dll" from your Destiny 2/bin directory to
 The tool is used via the command line:
 D2TextureRipper.exe -p "D:/Backups/BL-Dec7/packages" -o "D:/Images/0311" -i 0311  
 
-Required (and only) command line arguments are: -p, -o and -i.
+Required command line arguments are: -p, -o and -i (or -f).
 - -p \[packages path]: Packages path for Destiny 2 Beyond Light. An example would be: D:/Backups/BL-Dec7/packages"
 - -o \[output path]: Path where you want the images to go.
-- -i \[package id]: Package id that you want the images from. For the package "w64_investment_globals_0342_9", the package id would be 0342
-- -v \[version]: The version you want to extract from. Currently only valid flag is "prebl", without the flag it defaults to post-bl
+- -i \[package id]: Package id that you want the images from. For the package "w64_investment_globals_0342_9", the package id would be 0342.
+- -v \[version]: The version you want to extract from. Currently only valid flag is "prebl", without the flag it defaults to post-bl.
+- -f : Extract images from every package in the packages path you specify.
