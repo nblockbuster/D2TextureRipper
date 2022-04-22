@@ -69,7 +69,6 @@ private:
 	int64_t OodleLZ_Decompress;
 	HMODULE hOodleDll;
 
-
 	void getBlockTable();
 	void decryptBlock(Block block, unsigned char* blockBuffer, unsigned char*& decryptBuffer);
 	void decompressBlock(Block block, unsigned char* decryptBuffer, unsigned char*& decompBuffer);

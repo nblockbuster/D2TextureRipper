@@ -18,4 +18,3 @@ std::string getFileFromHash(std::string hsh);
 std::string getReferenceFromHash(std::string hash, std::string pkgsPath, bool prebl);
 std::string getPkgID(std::string hash);
 uint16_t getPkgID(uint32_t hash);
-

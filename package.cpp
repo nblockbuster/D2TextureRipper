@@ -49,15 +49,20 @@ std::string Package::getLatestPatchIDPath(std::string packageID)
 		{
 			fullPath = entry.path().u8string();
 
-
-			errno_t status = fopen_s(&patchPkg, fullPath.c_str(), "rb");
-			if (patchPkg == nullptr || status) exit(67);
-			fseek(patchPkg, 0x10, SEEK_SET);
+			patchPkg = _fsopen(fullPath.c_str(), "rb", _SH_DENYNO);
+			if (patchPkg == nullptr) exit(67);
+			if (preBL)
+				fseek(patchPkg, 0x4, SEEK_SET);
+			else
+				fseek(patchPkg, 0x10, SEEK_SET);
 			fread((char*)&pkgID, 1, 2, patchPkg);
 
 			if (packageID == uint16ToHexStr(pkgID))
 			{
-				fseek(patchPkg, 0x30, SEEK_SET);
+				if (preBL)
+					fseek(pkgFile, 0x20, SEEK_SET);
+				else
+					fseek(patchPkg, 0x30, SEEK_SET);
 				fread((char*)&patchID, 1, 2, patchPkg);
 				if (patchID > largestPatchID) largestPatchID = patchID;
 				std::replace(fullPath.begin(), fullPath.end(), '\\', '/');
@@ -68,17 +73,15 @@ std::string Package::getLatestPatchIDPath(std::string packageID)
 		}
 	}
 
-	return packagesPath + "/" + packageName + "_" + std::to_string(largestPatchID) + ".pkg";
+	return packagesPath + "\\" + packageName + "_" + std::to_string(largestPatchID) + ".pkg";
 }
 
 bool Package::readHeader()
 {
 	// Package data
-	auto status = fopen_s(&pkgFile, packagePath.c_str(), "rb");
-	if (status != 0)
-	{
+	pkgFile = _fsopen(packagePath.c_str(), "rb", _SH_DENYNO);
+	if (pkgFile == nullptr)
 		return false;
-	}
 
 	if (preBL) {
 		bool newPkg;
@@ -97,7 +100,7 @@ bool Package::readHeader()
 
 			fseek(pkgFile, 0xB4, SEEK_SET);
 			fread((char*)&header.entryTableSize, 1, 4, pkgFile);
-			
+
 			fseek(pkgFile, 0xD0, SEEK_SET);
 			fread((char*)&header.blockTableSize, 1, 2, pkgFile);
 
@@ -132,7 +135,6 @@ bool Package::readHeader()
 		fseek(pkgFile, 0x68, SEEK_SET);
 		fread((char*)&header.blockTableSize, 1, 4, pkgFile);
 		fread((char*)&header.blockTableOffset, 1, 4, pkgFile);
-
 	}
 	return true;
 }
@@ -180,7 +182,7 @@ void Package::getBlockTable()
 		fread((char*)&block.size, 1, 4, pkgFile);
 		fread((char*)&block.patchID, 1, 2, pkgFile);
 		fread((char*)&block.bitFlag, 1, 2, pkgFile);
-		if(preBL)
+		if (preBL)
 			fseek(pkgFile, 0x14, SEEK_CUR);
 		else
 			fseek(pkgFile, i + 0x20, SEEK_SET);
@@ -282,13 +284,12 @@ std::string Package::getEntryReference(std::string hash)
 
 	// Entry offset
 	uint32_t entryTableOffset;
-	auto status = fopen_s(&pkgFile, packagePath.c_str(), "rb");
-	if (status != 0)
+	pkgFile = _fsopen(packagePath.c_str(), "rb", _SH_DENYNO);
+	if (pkgFile == nullptr)
 	{
 		printf("\nFailed to initialise pkg file, exiting...\n");
-		std::cerr << hash << " " << packagePath.c_str() << std::endl << packagePath << std::endl << status << std::endl;
-		return "";
-		//exit(status);
+		std::cerr << hash << " " << packagePath.c_str() << std::endl << packagePath << std::endl;
+		exit(1);
 	}
 	if (preBL) {
 		//gen pre-bl
@@ -331,16 +332,37 @@ uint8_t Package::getEntryTypes(std::string hash, uint8_t& subType)
 
 	// Entry offset
 	uint32_t entryTableOffset;
-	auto status = fopen_s(&pkgFile, packagePath.c_str(), "rb");
-	if (status != 0)
+	pkgFile = _fsopen(packagePath.c_str(), "rb", _SH_DENYNO);
+	if (pkgFile == nullptr)
 	{
 		printf("\nFailed to initialise pkg file, exiting...\n");
 		std::cerr << hash << std::endl << packagePath;
-		return -1;
-		//exit(1);
+		exit(1);
 	}
-	fseek(pkgFile, 0x44, SEEK_SET);
-	fread((char*)&entryTableOffset, 1, 4, pkgFile);
+	if (preBL) {
+		//gen pre-bl
+		uint32_t newTableOffset;
+		bool newPkg = false;
+		fseek(pkgFile, 0x1A, SEEK_SET);
+		fread((char*)&newPkg, 1, 1, pkgFile);
+		if (newPkg)
+		{
+			//post-forsaken
+			fseek(pkgFile, 0x110, SEEK_SET);
+			fread((char*)&entryTableOffset, 1, 4, pkgFile);
+			entryTableOffset += 96;
+		}
+		else {
+			//pre-forsaken
+			fseek(pkgFile, 0xB8, SEEK_SET);
+			fread((char*)&entryTableOffset, 1, 4, pkgFile);
+		}
+	}
+	else {
+		//post-bl
+		fseek(pkgFile, 0x44, SEEK_SET);
+		fread((char*)&entryTableOffset, 1, 4, pkgFile);
+	}
 
 	// Getting reference
 	// EntryB
@@ -422,14 +444,7 @@ unsigned char* Package::getBufferFromEntry(Entry entry)
 	{
 		packagePath[packagePath.size() - 5] = currentBlock.patchID + 48;
 		FILE* pFile;
-		int status = fopen_s(&pFile, packagePath.c_str(), "rb");
-		if (status)
-		{
-			std::cerr << "FAILED GETTING PACKAGE FOR BLOCK EXTRACT ERR9532" << std::endl;
-			std::cerr << status << std::endl;
-			return new unsigned char[0];
-			//exit(status);
-		}
+		pFile = _fsopen(packagePath.c_str(), "rb", _SH_DENYNO);
 		fseek(pFile, currentBlock.offset, SEEK_SET);
 		unsigned char* blockBuffer = new unsigned char[currentBlock.size];
 		size_t result;

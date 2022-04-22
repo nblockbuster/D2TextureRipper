@@ -9,7 +9,6 @@ static void show_usage()
 }
 
 int main(int argc, char** argv) {
-
 	Sarge sarge;
 	sarge.setArgument("p", "pkgspath", "packages path", true);
 	sarge.setArgument("o", "outputpath", "output path", true);
@@ -30,9 +29,9 @@ int main(int argc, char** argv) {
 	sarge.getFlag("outputpath", outputPath);
 	sarge.getFlag("pkgid", pkgID);
 	sarge.getFlag("version", version);
-	
+
 	bool prebl = false;
-	
+
 	if (sarge.exists("folder")) {
 		std::string pkgidold;
 		std::filesystem::path pkgsFolder{ packagesPath };
@@ -40,16 +39,12 @@ int main(int argc, char** argv) {
 		std::vector<std::string> pkgf;
 		for (auto const& dir_entry : std::filesystem::directory_iterator{ pkgsFolder })
 		{
-			//if (dir_entry.path().string().substr((dir_entry.path().string().size() - 10), 4) == pkgidold)
-				//continue;
 			std::string pkgidfolder = dir_entry.path().string();
 			pkgidfolder = pkgidfolder.substr((pkgidfolder.size() - 10), 4);
-			//std::cout << dir_entry.path().string() << std::endl;
-			//std::cout << pkgidfolder << std::endl;
 			if (existingPkgIDS.find(pkgidfolder) == existingPkgIDS.end())
 			{
-					pkgf.push_back(pkgidfolder);
-					existingPkgIDS.insert(pkgidfolder);
+				pkgf.push_back(pkgidfolder);
+				existingPkgIDS.insert(pkgidfolder);
 			}
 		}
 		for (int o = 0; o < existingPkgIDS.size(); o++) {
@@ -65,10 +60,11 @@ int main(int argc, char** argv) {
 
 			for (int i = 0; i < pkg.entries.size(); i++) {
 				Entry entry = pkg.entries[i];
-				if (entry.numType == 32 && entry.numSubType == 1)
+				if (entry.numType == 32 && (entry.numSubType == 1 || entry.numSubType == 2))
+				//if (entry.numType == 32 && entry.numSubType == 2)
 				{
 					std::string datahash = entry.reference;
-					uint16_t textureFormat, width, height, arraySize;
+					int16_t textureFormat, width, height, arraySize;
 					std::string largeHash;
 					std::string headerHash = getReferenceFromHash(datahash, packagesPath, prebl);
 					hash = headerHash;
@@ -92,15 +88,15 @@ int main(int argc, char** argv) {
 						memcpy((char*)&val, data + 0x3C, 4);
 						largeHash = uint32ToHexStr(val);
 					}
-					if (largeHash != "FFFFFFFF" && largeHash != "")
-						hash = datahash;
-					else
+					if (largeHash != "ffffffff" && largeHash != "")
 						hash = largeHash;
+					else
+						hash = datahash;
 					delete[] data;
 
 					fileSize = getFile(prebl);
 
-					//p much just 100% copied from MDE/texture.cpp @ L64
+					//p much just 100% copied from MDE/texture.cpp
 
 					bool bCompressed = false;
 					if (70 < textureFormat < 99) bCompressed = true;
@@ -123,7 +119,9 @@ int main(int argc, char** argv) {
 					dds.dwPFBBitMask = 0xFF0000;
 					dds.dwPFABitMask = 0xFF000000;
 					dds.dwCaps = 0x1000;
-					dds.dwCaps2 = 0;
+						dds.dwCaps2 = 0x0;
+					if (entry.numType == 32 && entry.numSubType == 2)
+						dds.dwCaps2 = 0x200;
 					dds.dwCaps3 = 0;
 					dds.dwCaps4 = 0;
 					dds.dwReserved2 = 0;
@@ -157,7 +155,9 @@ int main(int argc, char** argv) {
 					}
 					if (!std::filesystem::exists(outputPath))
 						std::filesystem::create_directories(outputPath);
-					std::string fullDDSPath = outputPath + "/" + boost::to_upper_copy(pkgID) + "-" + boost::to_upper_copy(uint16ToHexStr(i)) + ".dds";
+					std::string fullDDSPath = outputPath + "\\" + boost::to_upper_copy(pkgID) + "-" + boost::to_upper_copy(uint16ToHexStr(i)) + ".dds";
+					std::string fullBMPPath = outputPath + "\\" + boost::to_upper_copy(pkgID) + "-" + boost::to_upper_copy(uint16ToHexStr(i)) + ".bmp";
+					std::string cubemapPath = outputPath + "\\cubemaps\\";
 					FILE* outputFile;
 					fopen_s(&outputFile, fullDDSPath.c_str(), "wb");
 					if (outputFile != NULL) {
@@ -169,22 +169,37 @@ int main(int argc, char** argv) {
 					std::string dxgiFormat;
 					std::string str;
 					dxgiFormat = DXGI_FORMAT[textureFormat];
-					if (dxgiFormat == "R8G8B8A8_UNORM") {
-						dxgiFormat += "_SRGB";
-						str = "texconv.exe \"" + fullDDSPath + "\" -y -nologo -srgb -ft PNG -f " + dxgiFormat;
+					//if (dxgiFormat == "R8G8B8A8_UNORM") {
+					//	dxgiFormat += "_SRGB";
+					//	str = "texconv.exe \"" + fullDDSPath + "\" -y -nologo -srgb -ft PNG -f " + dxgiFormat;
+					//}
+					//else
+					if (entry.numType == 32 && entry.numSubType == 2)
+					{
+						std::string assembl = "texassemble.exe h-cross \"" + fullDDSPath + "\" -y -nologo -o \"" + fullBMPPath + "\"";
+						printf((assembl + "\n").c_str());
+						system(assembl.c_str());
+						str = "texconv.exe \"" + fullBMPPath + "\" -y -nologo -ft PNG -o" + outputPath + "\\" + "cubemaps";
+						printf((str + "\n").c_str());
+						system(str.c_str());
 					}
 					else
-						str = "texconv.exe \"" + fullDDSPath + "\" -y -nologo -ft PNG -f " + dxgiFormat;
-					printf((str + "\n").c_str());
-					system(str.c_str());
+					{
+						if (textureFormat == 28)
+							dxgiFormat += "_SRGB";
+						str = "texconv.exe \"" + fullDDSPath + "\" -y -nologo -srgb -ft PNG -f " + dxgiFormat + " -o " + outputPath;
+						printf((str + "\n").c_str());
+						system(str.c_str());
+					}
 					std::filesystem::remove(fullDDSPath);
+					if (entry.numType == 32 && entry.numSubType == 2)
+						std::filesystem::remove(fullBMPPath);
 					delete[] data;
 				}
 			}
 		}
 	}
 	else {
-
 		Package pkg(pkgID, packagesPath);
 
 		if (version == "prebl" || version == "PREBL") {
@@ -197,7 +212,8 @@ int main(int argc, char** argv) {
 
 		for (int i = 0; i < pkg.entries.size(); i++) {
 			Entry entry = pkg.entries[i];
-			if (entry.numType == 32 && entry.numSubType == 1)
+			if (entry.numType == 32 && (entry.numSubType == 1 || entry.numSubType == 2))
+			//if (entry.numType == 32 && entry.numSubType == 2)
 			{
 				std::string datahash = entry.reference;
 				int16_t textureFormat, width, height, arraySize;
@@ -224,16 +240,15 @@ int main(int argc, char** argv) {
 					memcpy((char*)&val, data + 0x3C, 4);
 					largeHash = uint32ToHexStr(val);
 				}
-				if (largeHash != "FFFFFFFF" && largeHash != "")
-					hash = datahash;
-				else
+				if (largeHash != "ffffffff" && largeHash != "")
 					hash = largeHash;
+				else
+					hash = datahash;
 				delete[] data;
 
 				fileSize = getFile(prebl);
 
-				//p much just 100% copied from MDE/texture.cpp @ L64
-				//generating dds & dxt header
+				//p much just 100% copied from MDE/texture.cpp
 
 				bool bCompressed = false;
 				if (70 < textureFormat < 99) bCompressed = true;
@@ -256,7 +271,9 @@ int main(int argc, char** argv) {
 				dds.dwPFBBitMask = 0xFF0000;
 				dds.dwPFABitMask = 0xFF000000;
 				dds.dwCaps = 0x1000;
-				dds.dwCaps2 = 0;
+				dds.dwCaps2 = 0x0;
+				if (entry.numType == 32 && entry.numSubType == 2)
+					dds.dwCaps2 = 0x200;
 				dds.dwCaps3 = 0;
 				dds.dwCaps4 = 0;
 				dds.dwReserved2 = 0;
@@ -290,11 +307,11 @@ int main(int argc, char** argv) {
 				}
 				if (!std::filesystem::exists(outputPath))
 					std::filesystem::create_directories(outputPath);
-				std::string fullDDSPath = outputPath + "/" + boost::to_upper_copy(pkgID) + "-" + boost::to_upper_copy(uint16ToHexStr(i)) + ".dds";
+				std::string fullDDSPath = outputPath + "\\" + boost::to_upper_copy(pkgID) + "-" + boost::to_upper_copy(uint16ToHexStr(i)) + ".dds";
+				std::string fullBMPPath = outputPath + "\\" + boost::to_upper_copy(pkgID) + "-" + boost::to_upper_copy(uint16ToHexStr(i)) + ".bmp";
 				FILE* outputFile;
 				fopen_s(&outputFile, fullDDSPath.c_str(), "wb");
 				if (outputFile != NULL) {
-					//writing headers and then data
 					fwrite(&dds, sizeof(struct DDSHeader), 1, outputFile);
 					fwrite(&dxt, sizeof(struct DXT10Header), 1, outputFile);
 					fwrite(data, fileSize, 1, outputFile);
@@ -303,17 +320,31 @@ int main(int argc, char** argv) {
 				std::string dxgiFormat;
 				std::string str;
 				dxgiFormat = DXGI_FORMAT[textureFormat];
-				if (dxgiFormat == "R8G8B8A8_UNORM") {
-					//srgb fix because textures are in linear color space instead of sRGB, and send to texconv for png output
-					dxgiFormat += "_SRGB";
-					str = "texconv.exe \"" + fullDDSPath + "\" -y -nologo -srgb -ft PNG -f " + dxgiFormat;
+				//if (dxgiFormat == "R8G8B8A8_UNORM") {
+				//	dxgiFormat += "_SRGB";
+				//	str = "texconv.exe \"" + fullDDSPath + "\" -y -nologo -srgb -ft PNG -f " + dxgiFormat;
+				//}
+				//else
+				if (entry.numType == 32 && entry.numSubType == 2)
+				{
+					std::string assembl = "texassemble.exe h-cross \"" + fullDDSPath + "\" -y -nologo -o \"" + fullBMPPath + "\"";
+					printf((assembl + "\n").c_str());
+					system(assembl.c_str());
+					str = "texconv.exe \"" + fullBMPPath + "\" -y -nologo -ft PNG -o" + outputPath + "\\" + "cubemaps";
+					printf((str + "\n").c_str());
+					system(str.c_str());
 				}
 				else
-					str = "texconv.exe \"" + fullDDSPath + "\" -y -nologo -ft PNG -f " + dxgiFormat;
-
-				printf((str + "\n").c_str());
-				system(str.c_str());
+				{
+					if (textureFormat == 28)
+						dxgiFormat += "_SRGB";
+					str = "texconv.exe \"" + fullDDSPath + "\" -y -nologo -srgb -ft PNG -f " + dxgiFormat + " -o " + outputPath;
+					printf((str + "\n").c_str());
+					system(str.c_str());
+				}
 				std::filesystem::remove(fullDDSPath);
+				if (entry.numType == 32 && entry.numSubType == 2)
+					std::filesystem::remove(fullBMPPath);
 				delete[] data;
 			}
 		}

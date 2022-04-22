@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include "texture.h"
 #include <boost\algorithm\string.hpp>
+//#include <DirectXTex.h>
 
 std::string pkgID = "";
 std::string packagesPath = "";
