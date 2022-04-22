@@ -50,6 +50,8 @@ int main(int argc, char** argv) {
 		for (int o = 0; o < existingPkgIDS.size(); o++) {
 			Package pkg(pkgf[o], packagesPath);
 
+			outputPath += "\\" + pkgf[o];
+
 			if (version == "prebl" || version == "PREBL") {
 				pkg.preBL = true;
 				prebl = true;
