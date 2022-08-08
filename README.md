@@ -5,7 +5,8 @@ Requires [Sarge](https://github.com/MayaPosch/Sarge), [DestinyUnpackerCPP](https
 
 ## Usage
 Tool requires Windows 64-bit and a Destiny 2 installation from version 3.0.0.1 (Beyond Light) to 4.0.0.1 (The Witch Queen)  
-You also need to copy "oo2core_8_win64.dll" from your Destiny 2/bin directory to where you put the exe.  
+You also need to copy "oo2core_9_win64.dll" from your Destiny 2/bin directory to where you put the exe.  
+> For pre-beyond light you need to copy the "oo2core_3_win64.dll" from that version's installation folder
 
 The tool is used via the command line:
 D2TextureRipper.exe -p "D:/Backups/BL-Dec7/packages" -o "D:/Images/0311" -i 0311  
