@@ -63,7 +63,6 @@ private:
 	};
 	const std::string CUSTOM_DIR = "output";
 
-	FILE* pkgFile;
 	std::vector<Block> blocks;
 
 	int64_t OodleLZ_Decompress;
@@ -74,6 +73,7 @@ private:
 	void decompressBlock(Block block, unsigned char* decryptBuffer, unsigned char*& decompBuffer);
 
 public:
+	FILE* pkgFile;
 	std::string packagesPath = "";
 	std::string packagePath;
 	std::string packageName;
@@ -85,7 +85,6 @@ public:
 	bool initOodle();
 	void modifyNonce();
 	bool readHeader();
-	bool Unpack();
 	void getEntryTable();
 	std::string getEntryReference(std::string hash);
 	uint8_t getEntryTypes(std::string hash, uint8_t& subType);
